@@ -30,3 +30,21 @@
 *.exe
 *.out
 *.app
+# CMake
+.idea/
+bin/
+build/
+cmake-build-debug/
+cmake-build-release/
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+bin.dbg/
+bin.rel/
