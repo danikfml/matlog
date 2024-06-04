@@ -7,102 +7,103 @@
 #include <memory>
 
 // Определение списка аксиом
-const std::vector<std::string> axiomsList = {
+const std::vector<std::string> baseAxioms = {
         "p->(q->p)",  // А1
         "(s->(p->q))->((s->p)->(s->q))",  // А2
         "((p->f)->f)->p"  // А3
 };
 
 // Имена аксиом для отображения
-const std::vector<std::string> axiomsNames = {
+const std::vector<std::string> axiomLabels = {
         "K",
         "S",
         "E¬"
 };
 
 // Класс, представляющий узел выражения
-class ExpressionNode {
+class Node {
 public:
-    char value;  // значение узла
-    std::unique_ptr<ExpressionNode> leftChild;
-    std::unique_ptr<ExpressionNode> rightChild;
+    char symbol;  // значение узла
+    std::unique_ptr<Node> leftChild;  // левый дочерний узел
+    std::unique_ptr<Node> rightChild;  // правый дочерний узел
 
     // Конструктор узла
-    explicit ExpressionNode(char val) : value(val), leftChild(nullptr), rightChild(nullptr) {}
+    explicit Node(char val) : symbol(val), leftChild(nullptr), rightChild(nullptr) {}
 
     // Статический метод для создания узла из формулы
-    static std::unique_ptr<ExpressionNode> createFromFormula(const std::string& formula);
+    static std::unique_ptr<Node> constructFromFormula(const std::string& formula);
 };
 
 // Класс, представляющий дерево выражений
 class ExpressionTree {
 public:
-    std::string formula;  // исходная формула
-    std::unique_ptr<ExpressionNode> rootNode;
+    std::string expr;  // исходная формула
+    std::unique_ptr<Node> root;  // корень дерева
+
     // Конструктор дерева
-    explicit ExpressionTree(std::string expr) : formula(std::move(expr)), rootNode(nullptr) {
-        rootNode = ExpressionNode::createFromFormula(formula);
+    explicit ExpressionTree(std::string expression) : expr(std::move(expression)), root(nullptr) {
+        root = Node::constructFromFormula(expr);
     }
 };
 
 // Структура для результата сравнения узлов
-struct NodeComparisonResult {
-    int resultCode;  // результат сравнения
-    const ExpressionNode* axiomNode;  // узел аксиомы
-    const ExpressionNode* formulaNode;  // узел формулы
+struct NodeCompareResult {
+    int compareCode;  // результат сравнения
+    const Node* axiomNode;  // узел аксиомы
+    const Node* formulaNode;  // узел формулы
 
-    NodeComparisonResult() : resultCode(0), axiomNode(nullptr), formulaNode(nullptr) {}
-    NodeComparisonResult(int res, const ExpressionNode* axiom, const ExpressionNode* formula)
-            : resultCode(res), axiomNode(axiom), formulaNode(formula) {}
+    NodeCompareResult() : compareCode(0), axiomNode(nullptr), formulaNode(nullptr) {}
+    NodeCompareResult(int res, const Node* axiom, const Node* formula)
+            : compareCode(res), axiomNode(axiom), formulaNode(formula) {}
 };
 
 // Структура для бета-вывода
-struct BetaDerivationResult {
-    bool isSuccessful;  // флаг успешного вывода
-    int axiomIdx;  // индекс аксиомы
+struct BetaResult {
+    bool derived;  // флаг успешного вывода
+    int axiomIndex;  // индекс аксиомы
     char variable;  // переменная
-    std::string subFormula;  // подформула
+    std::string subExpr;  // подформула
 
-    BetaDerivationResult() : isSuccessful(false), axiomIdx(0), variable(' '), subFormula("") {}
-    BetaDerivationResult(bool success, int index, char var, std::string subf)
-            : isSuccessful(success), axiomIdx(index), variable(var), subFormula(std::move(subf)) {}
+    BetaResult() : derived(false), axiomIndex(0), variable(' '), subExpr("") {}
+    BetaResult(bool success, int index, char var, std::string subf)
+            : derived(success), axiomIndex(index), variable(var), subExpr(std::move(subf)) {}
 };
 
 // Метод для создания узла выражения из формулы
-std::unique_ptr<ExpressionNode> ExpressionNode::createFromFormula(const std::string& formula) {
+std::unique_ptr<Node> Node::constructFromFormula(const std::string& formula) {
     if (formula.size() == 1 && islower(formula[0])) {
-        return std::make_unique<ExpressionNode>(formula[0]);
+        return std::make_unique<Node>(formula[0]);
     }
 
-    std::stack<std::unique_ptr<ExpressionNode>> nodesStack;
+    std::stack<std::unique_ptr<Node>> nodeStack;
     for (int i = formula.size() - 1; i >= 0; --i) {
         if (formula[i] == ')') {
-            size_t idx = i;
+            size_t index = i;
             int balance = -1;
             // Найти соответствующую открывающую скобку
             while (balance != 0) {
-                --idx;
-                if (formula[idx] == ')') --balance;
-                else if (formula[idx] == '(') ++balance;
+                --index;
+                if (formula[index] == ')') --balance;
+                else if (formula[index] == '(') ++balance;
             }
-            nodesStack.push(createFromFormula(formula.substr(idx + 1, i - idx - 1)));
-            i = idx;
+            nodeStack.push(constructFromFormula(formula.substr(index + 1, i - index - 1)));
+            i = index;
         } else if (islower(formula[i])) {
-            nodesStack.push(std::make_unique<ExpressionNode>(formula[i]));
+            nodeStack.push(std::make_unique<Node>(formula[i]));
         } else if (formula[i] == '-' && formula[i + 1] == '>') {
-            auto currentNode = std::make_unique<ExpressionNode>('>');
-            currentNode->leftChild = createFromFormula(formula.substr(0, i));
-            currentNode->rightChild = std::move(nodesStack.top());
-            nodesStack.pop();
+            auto currentNode = std::make_unique<Node>('>');
+            currentNode->leftChild = constructFromFormula(formula.substr(0, i));
+            currentNode->rightChild = std::move(nodeStack.top());
+            nodeStack.pop();
             return currentNode;
         }
     }
-    return std::move(nodesStack.top());
+    return std::move(nodeStack.top());
 }
 
 // Функция для преобразования узла в строку
-std::string nodeToString(const ExpressionNode& node) {
-    if (!node.leftChild && !node.rightChild) return std::string(1, node.value);
+std::string nodeToString(const Node& node) {
+    if (!node.leftChild && !node.rightChild) return std::string(1, node.symbol);
     std::string result;
     if (node.leftChild) result += nodeToString(*node.leftChild);
     result += "->";
@@ -111,49 +112,49 @@ std::string nodeToString(const ExpressionNode& node) {
 }
 
 // Функция для корректировки формулы
-std::string adjustFormula(const std::string& formula) {
-    std::stack<char> brackets;
-    std::vector<bool> usageFlags(formula.size(), true);
-    bool leftParamExists = false, rightParamRequired = false, correctionRequired = false, operationRequired = false;
+std::string refineFormula(const std::string& formula) {
+    std::stack<char> bracketStack;
+    std::vector<bool> charUsage(formula.size(), true);
+    bool leftExists = false, rightNeeded = false, correctionRequired = false, operationNeeded = false;
 
     for (size_t i = 0; i < formula.size(); ++i) {
         if (formula[i] == '(') {
-            if (operationRequired) throw std::string("Необходима операция между переменными");
-            leftParamExists = false;
-            brackets.push('(');
+            if (operationNeeded) throw std::string("Необходима операция между переменными");
+            leftExists = false;
+            bracketStack.push('(');
         } else if (formula[i] == ')') {
-            if (rightParamRequired) throw std::string("Необходима операция между переменными");
-            if (!brackets.empty() && brackets.top() == '(') {
-                brackets.pop();
+            if (rightNeeded) throw std::string("Необходима операция между переменными");
+            if (!bracketStack.empty() && bracketStack.top() == '(') {
+                bracketStack.pop();
             } else {
                 throw std::string("Некорректная последовательность скобок");
             }
         } else if (formula[i] == '-' && formula[i + 1] == '>') {
-            if (!leftParamExists) throw std::string("Нет переменной перед операцией");
-            leftParamExists = false;
-            rightParamRequired = true;
-            operationRequired = false;
+            if (!leftExists) throw std::string("Нет переменной перед операцией");
+            leftExists = false;
+            rightNeeded = true;
+            operationNeeded = false;
             i++;
         } else if (islower(formula[i])) {
-            if (leftParamExists) throw std::string("Необходима операция между переменными");
-            if (rightParamRequired) rightParamRequired = false;
-            leftParamExists = true;
-            operationRequired = true;
+            if (leftExists) throw std::string("Необходима операция между переменными");
+            if (rightNeeded) rightNeeded = false;
+            leftExists = true;
+            operationNeeded = true;
         } else if (formula[i] == ' ') {
-            usageFlags[i] = false;
+            charUsage[i] = false;
             correctionRequired = true;
         } else {
             throw std::string("Недопустимый символ");
         }
     }
-    if (!brackets.empty()) throw std::string("Некорректная последовательность скобок");
-    if (rightParamRequired) throw std::string("Нет правого параметра для операции");
+    if (!bracketStack.empty()) throw std::string("Некорректная последовательность скобок");
+    if (rightNeeded) throw std::string("Нет правого параметра для операции");
 
     std::string correctedFormula = formula;
     if (correctionRequired) {
         size_t j = 0;
         for (size_t i = 0; i < formula.size(); ++i) {
-            if (usageFlags[i]) {
+            if (charUsage[i]) {
                 correctedFormula[j++] = formula[i];
             }
         }
@@ -164,10 +165,10 @@ std::string adjustFormula(const std::string& formula) {
 }
 
 // Функция для разбора формулы
-std::string parseFormula(const std::string& formula) {
+std::string interpretFormula(const std::string& formula) {
     std::string newFormula;
     try {
-        newFormula = adjustFormula(formula);
+        newFormula = refineFormula(formula);
     } catch (const std::string& errorMsg) {
         std::cout << "Ошибка формулы: " << errorMsg << '\n';
     }
@@ -175,21 +176,21 @@ std::string parseFormula(const std::string& formula) {
 }
 
 // Функция для построения дерева из формулы
-std::unique_ptr<ExpressionTree> createTreeFromFormula(const std::string& formula) {
-    std::string correctedFormula = parseFormula(formula);
+std::unique_ptr<ExpressionTree> buildTreeFromFormula(const std::string& formula) {
+    std::string correctedFormula = interpretFormula(formula);
     return std::make_unique<ExpressionTree>(correctedFormula);
 }
 
 // Функция для сравнения узлов
-bool compareExpressionNodes(const ExpressionNode& node1, const ExpressionNode& node2) {
-    if (node1.value != node2.value) return false;
+bool compareNodes(const Node& node1, const Node& node2) {
+    if (node1.symbol != node2.symbol) return false;
     if (node1.leftChild && node2.leftChild) {
-        if (!compareExpressionNodes(*node1.leftChild, *node2.leftChild)) return false;
+        if (!compareNodes(*node1.leftChild, *node2.leftChild)) return false;
     } else if (node1.leftChild || node2.leftChild) {
         return false;
     }
     if (node1.rightChild && node2.rightChild) {
-        if (!compareExpressionNodes(*node1.rightChild, *node2.rightChild)) return false;
+        if (!compareNodes(*node1.rightChild, *node2.rightChild)) return false;
     } else if (node1.rightChild || node2.rightChild) {
         return false;
     }
@@ -197,31 +198,31 @@ bool compareExpressionNodes(const ExpressionNode& node1, const ExpressionNode& n
 }
 
 // Функция для сравнения деревьев
-NodeComparisonResult compareExpressionTrees(const ExpressionNode& axiom, const ExpressionNode& formula) {
-    if (axiom.value == formula.value) {
+NodeCompareResult compareTrees(const Node& axiom, const Node& formula) {
+    if (axiom.symbol == formula.symbol) {
         if (!axiom.leftChild && !formula.leftChild && !axiom.rightChild && !formula.rightChild) {
             return {1, nullptr, nullptr};  // Листовой узел
         } else {
-            NodeComparisonResult leftResult(1, nullptr, nullptr);
+            NodeCompareResult leftResult(1, nullptr, nullptr);
             if (axiom.leftChild && formula.leftChild) {
-                leftResult = compareExpressionTrees(*axiom.leftChild, *formula.leftChild);
+                leftResult = compareTrees(*axiom.leftChild, *formula.leftChild);
             }
-            NodeComparisonResult rightResult(1, nullptr, nullptr);
+            NodeCompareResult rightResult(1, nullptr, nullptr);
             if (axiom.rightChild && formula.rightChild) {
-                rightResult = compareExpressionTrees(*axiom.rightChild, *formula.rightChild);
+                rightResult = compareTrees(*axiom.rightChild, *formula.rightChild);
             }
-            if (leftResult.resultCode == 0 || rightResult.resultCode == 0) return {};
-            if (leftResult.resultCode == 1 && rightResult.resultCode == 1) return {1, nullptr, nullptr};
-            if (leftResult.resultCode == 1) return rightResult;
-            if (rightResult.resultCode == 1) return leftResult;
-            if (leftResult.axiomNode->value == rightResult.axiomNode->value) {
+            if (leftResult.compareCode == 0 || rightResult.compareCode == 0) return {};
+            if (leftResult.compareCode == 1 && rightResult.compareCode == 1) return {1, nullptr, nullptr};
+            if (leftResult.compareCode == 1) return rightResult;
+            if (rightResult.compareCode == 1) return leftResult;
+            if (leftResult.axiomNode->symbol == rightResult.axiomNode->symbol) {
                 return leftResult;
             } else {
                 return {};
             }
         }
     } else {
-        if (axiom.value == 'f' || axiom.value == '>') {
+        if (axiom.symbol == 'f' || axiom.symbol == '>') {
             return {};
         } else {
             return {2, &axiom, &formula};  // Переменная найдена
@@ -230,41 +231,41 @@ NodeComparisonResult compareExpressionTrees(const ExpressionNode& axiom, const E
 }
 
 // Функция для клонирования узла
-void cloneExpressionNode(ExpressionNode& dest, const ExpressionNode& src) {
-    dest.value = src.value;
+void cloneNode(Node& dest, const Node& src) {
+    dest.symbol = src.symbol;
     if (src.leftChild) {
-        dest.leftChild = std::make_unique<ExpressionNode>(src.leftChild->value);
-        cloneExpressionNode(*dest.leftChild, *src.leftChild);
+        dest.leftChild = std::make_unique<Node>(src.leftChild->symbol);
+        cloneNode(*dest.leftChild, *src.leftChild);
     }
     if (src.rightChild) {
-        dest.rightChild = std::make_unique<ExpressionNode>(src.rightChild->value);
-        cloneExpressionNode(*dest.rightChild, *src.rightChild);
+        dest.rightChild = std::make_unique<Node>(src.rightChild->symbol);
+        cloneNode(*dest.rightChild, *src.rightChild);
     }
 }
 
 // Функция для замены значения узла
-void replaceNodeValue(char target, const ExpressionNode& replacement, ExpressionNode& root) {
-    if (root.value == target) {
-        cloneExpressionNode(root, replacement);
+void substituteNodeValue(char target, const Node& replacement, Node& root) {
+    if (root.symbol == target) {
+        cloneNode(root, replacement);
     } else {
-        if (root.leftChild) replaceNodeValue(target, replacement, *root.leftChild);
-        if (root.rightChild) replaceNodeValue(target, replacement, *root.rightChild);
+        if (root.leftChild) substituteNodeValue(target, replacement, *root.leftChild);
+        if (root.rightChild) substituteNodeValue(target, replacement, *root.rightChild);
     }
 }
 
 // Функция для проверки бета-вывода
-BetaDerivationResult betaDerivationCheck(const std::vector<std::unique_ptr<ExpressionTree>>& axioms, const ExpressionTree& formula) {
+BetaResult checkBetaDerivation(const std::vector<std::unique_ptr<ExpressionTree>>& axioms, const ExpressionTree& formula) {
     for (int i = 0; i < axioms.size(); ++i) {
-        NodeComparisonResult result = compareExpressionTrees(*axioms[i]->rootNode, *formula.rootNode);
-        if (result.resultCode == 2) {
-            auto modifiedTree = std::make_unique<ExpressionTree>(axioms[i]->formula);
-            replaceNodeValue(result.axiomNode->value, *result.formulaNode, *modifiedTree->rootNode);
-            if (compareExpressionNodes(*modifiedTree->rootNode, *formula.rootNode)) {
-                std::string subFormula = nodeToString(*result.formulaNode);
-                if (subFormula.size() >= 3) {
-                    subFormula = subFormula.substr(1, subFormula.size() - 2);
+        NodeCompareResult result = compareTrees(*axioms[i]->root, *formula.root);
+        if (result.compareCode == 2) {
+            auto modifiedTree = std::make_unique<ExpressionTree>(axioms[i]->expr);
+            substituteNodeValue(result.axiomNode->symbol, *result.formulaNode, *modifiedTree->root);
+            if (compareNodes(*modifiedTree->root, *formula.root)) {
+                std::string subExpr = nodeToString(*result.formulaNode);
+                if (subExpr.size() >= 3) {
+                    subExpr = subExpr.substr(1, subExpr.size() - 2);
                 }
-                return {true, i, result.axiomNode->value, subFormula};
+                return {true, i, result.axiomNode->symbol, subExpr};
             }
         }
     }
@@ -272,10 +273,10 @@ BetaDerivationResult betaDerivationCheck(const std::vector<std::unique_ptr<Expre
 }
 
 // Функция для проверки Modus Ponens
-std::pair<int, int> modusPonensCheck(const std::vector<std::unique_ptr<ExpressionTree>>& axioms, const ExpressionTree& formula) {
+std::pair<int, int> checkModusPonens(const std::vector<std::unique_ptr<ExpressionTree>>& axioms, const ExpressionTree& formula) {
     std::vector<size_t> candidates;
     for (size_t i = 0; i < axioms.size(); ++i) {
-        if (compareExpressionNodes(*axioms[i]->rootNode->rightChild, *formula.rootNode)) {
+        if (compareNodes(*axioms[i]->root->rightChild, *formula.root)) {
             candidates.push_back(i);
         }
     }
@@ -283,7 +284,7 @@ std::pair<int, int> modusPonensCheck(const std::vector<std::unique_ptr<Expressio
     for (size_t candidate : candidates) {
         result.first = candidate;
         for (int i = 0; i < axioms.size(); ++i) {
-            if (compareExpressionNodes(*axioms[candidate]->rootNode->leftChild, *axioms[i]->rootNode)) {
+            if (compareNodes(*axioms[candidate]->root->leftChild, *axioms[i]->root)) {
                 result.second = i;
                 break;
             }
@@ -299,8 +300,8 @@ int main() {
 
     // Создание деревьев для аксиом
     std::vector<std::unique_ptr<ExpressionTree>> axiomsTrees;
-    for (const auto& axiom : axiomsList) {
-        axiomsTrees.push_back(createTreeFromFormula(axiom));
+    for (const auto& axiom : baseAxioms) {
+        axiomsTrees.push_back(buildTreeFromFormula(axiom));
     }
 
     std::string userInput;
@@ -311,52 +312,52 @@ int main() {
         if (userInput.empty()) continue;
 
         // Разбор и корректировка введенной формулы
-        std::string correctInput = parseFormula(userInput);
+        std::string correctInput = interpretFormula(userInput);
         if (!correctInput.empty()) {
-            auto inputTree = createTreeFromFormula(correctInput);
+            auto inputTree = buildTreeFromFormula(correctInput);
             bool isEquivalent = false;
             int equivalentIndex = 0;
             for (int i = 0; i < axiomsTrees.size(); ++i) {
-                if (compareExpressionNodes(*axiomsTrees[i]->rootNode, *inputTree->rootNode)) {
+                if (compareNodes(*axiomsTrees[i]->root, *inputTree->root)) {
                     isEquivalent = true;
                     equivalentIndex = i;
                     break;
                 }
             }
             if (isEquivalent) {
-                std::cout << "Формула " << inputTree->formula << " эквивалентна ";
-                if (equivalentIndex < axiomsList.size()) {
-                    std::cout << "аксиоме " << axiomsNames[equivalentIndex];
+                std::cout << "Формула " << inputTree->expr << " эквивалентна ";
+                if (equivalentIndex < baseAxioms.size()) {
+                    std::cout << "аксиоме " << axiomLabels[equivalentIndex];
                 } else {
-                    std::cout << "формуле " << axiomsTrees[equivalentIndex]->formula;
+                    std::cout << "формуле " << axiomsTrees[equivalentIndex]->expr;
                 }
                 std::cout << ".\n";
             } else {
-                BetaDerivationResult betaResult = betaDerivationCheck(axiomsTrees, *inputTree);
-                if (betaResult.isSuccessful) {
-                    std::cout << "Формула " << inputTree->formula << " выводима из ";
-                    if (betaResult.axiomIdx < axiomsList.size()) {
-                        std::cout << "аксиоме " << axiomsNames[betaResult.axiomIdx];
+                BetaResult betaResult = checkBetaDerivation(axiomsTrees, *inputTree);
+                if (betaResult.derived) {
+                    std::cout << "Формула " << inputTree->expr << " выводится из ";
+                    if (betaResult.axiomIndex < baseAxioms.size()) {
+                        std::cout << "аксиоме " << axiomLabels[betaResult.axiomIndex];
                     } else {
-                        std::cout << "формулы " << axiomsTrees[betaResult.axiomIdx]->formula;
+                        std::cout << "формулы " << axiomsTrees[betaResult.axiomIndex]->expr;
                     }
-                    std::cout << " с заменой переменной \"" << betaResult.variable << "\" на \"" << betaResult.subFormula << "\".\n";
+                    std::cout << " с заменой переменной \"" << betaResult.variable << "\" на \"" << betaResult.subExpr << "\".\n";
                     axiomsTrees.push_back(std::move(inputTree));
                     continue;
                 } else {
-                    std::pair<int, int> mpResult = modusPonensCheck(axiomsTrees, *inputTree);
+                    std::pair<int, int> mpResult = checkModusPonens(axiomsTrees, *inputTree);
                     if (mpResult.first != -1 && mpResult.second != -1) {
-                        std::cout << "Формула " << inputTree->formula << " выводима из ";
-                        if (mpResult.first < axiomsList.size()) {
-                            std::cout << "аксиоме " << axiomsNames[mpResult.first];
+                        std::cout << "Формула " << inputTree->expr << " выводима из ";
+                        if (mpResult.first < baseAxioms.size()) {
+                            std::cout << "аксиоме " << axiomLabels[mpResult.first];
                         } else {
-                            std::cout << "формуле " << axiomsTrees[mpResult.first]->formula;
+                            std::cout << "формуле " << axiomsTrees[mpResult.first]->expr;
                         }
                         std::cout << " и ";
-                        if (mpResult.second < axiomsList.size()) {
-                            std::cout << "аксиоме " << axiomsNames[mpResult.second];
+                        if (mpResult.second < baseAxioms.size()) {
+                            std::cout << "аксиоме " << axiomLabels[mpResult.second];
                         } else {
-                            std::cout << "формуле " << axiomsTrees[mpResult.second]->formula;
+                            std::cout << "формуле " << axiomsTrees[mpResult.second]->expr;
                         }
                         std::cout << " по правилу modus ponens.\n";
                         axiomsTrees.push_back(std::move(inputTree));
