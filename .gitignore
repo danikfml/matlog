@@ -35,6 +35,7 @@
 bin/
 build/
 cmake-build-release/
+cmake-build-debug/
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
